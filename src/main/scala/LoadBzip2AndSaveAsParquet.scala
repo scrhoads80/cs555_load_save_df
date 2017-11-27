@@ -7,32 +7,48 @@ import scala.collection.immutable._
 object LoadBzip2AndSaveAsParquet {
 
   def main(args: Array[String]): Unit = {
-    val path = args(0)
 
-    val spark = SparkSession.builder().appName("Load And Save Bz2 Files").config("spark.master", "local[4]").getOrCreate()
+    if(args.length != 4) {
+      println("invalid number of args")
+      println("bzPath parquetOutputPath commaSeperated2digitMonts (e.g. 09,10) <local | yarn>")
+      return
+    }
+
+    val bzPath = args(0)
+    val parquetPath = args(1)
+    val commaSeperatedMonths = args(2)
+    val localOrYarn = args(3)
+
+    val monthSeq = commaSeperatedMonths.split(',').toSeq
+
+    val spark = if(localOrYarn == "local") {
+      SparkSession.builder().appName("LoadBzIntoParquet").config("spark.master", "local[4]").getOrCreate()
+    } else {
+      SparkSession.builder().appName("LoadBzIntoParquet").getOrCreate()
+    }
+
 
     // create list of values for bz2 files
 //    val sixToTwelveRange = Seq("06", "07", "08", "09", "10", "11", "12")
-    val sixToTwelveRange = Seq("09", "10")
 
-    val submissionStrList = sixToTwelveRange.map(x => "RS_2016-" + x + ".bz2")
-    val commentStrList = sixToTwelveRange.map(x => "RC_2016-" + x + ".bz2")
+    val submissionStrList = monthSeq.map(x => "RS_2016-" + x + ".bz2")
+    val commentStrList = monthSeq.map(x => "RC_2016-" + x + ".bz2")
 
     // read json file for submission
     submissionStrList.map(submissionFileBz2 => {
-      readBzWriteParquet(submissionFileBz2, path, spark)
+      readBzWriteParquet(submissionFileBz2, bzPath, parquetPath, spark)
     })
 
-    commentStrList.map(readBzWriteParquet(_, path, spark))
+    commentStrList.map(readBzWriteParquet(_, bzPath, parquetPath, spark))
 
     spark.stop()
   }
 
-  def readBzWriteParquet(submissionFileBz2: String, path: String, spark: SparkSession): Unit = {
-    val subDf = spark.read.json(path + File.separator + submissionFileBz2)
+  def readBzWriteParquet(submissionFileBz2: String, bzPath: String, parquetPath: String, spark: SparkSession): Unit = {
+    val subDf = spark.read.json(bzPath + File.separator + submissionFileBz2)
 
     // save out to parquet
-    subDf.write.parquet(path + File.separator + "parquet" + File.separator + submissionFileBz2.split(".bz2")(0))
+    subDf.write.parquet(parquetPath + File.separator + submissionFileBz2.split(".bz2")(0))
   }
 
 }
